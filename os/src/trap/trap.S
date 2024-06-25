@@ -2,9 +2,11 @@
 .macro SAVE_GP n
     sd x\n, \n*8(sp)
 .endm
+
 .macro LOAD_GP n
     ld x\n, \n*8(sp)
 .endm
+
     .section .text
     .globl __alltraps
     .globl __restore
@@ -20,7 +22,7 @@ __alltraps:
     sd x3, 3*8(sp)
     # skip tp(x4), application does not use it
     # save x5~x31
-    .set n, 5
+    .set n, 5  // 5 + 27 = 32
     .rept 27
         SAVE_GP %n
         .set n, n+1
@@ -47,7 +49,7 @@ __restore:
     ld t1, 33*8(sp)
     ld t2, 2*8(sp)
     csrw sstatus, t0
-    csrw sepc, t1
+    csrw sepc, t1  # 这里会返回到用户栈
     csrw sscratch, t2
     # restore general-purpuse registers except sp/tp
     ld x1, 1*8(sp)

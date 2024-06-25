@@ -1,5 +1,6 @@
 use riscv::register::sstatus::{self, Sstatus, SPP};
 /// Trap Context
+/// 按照 C 语言中的内存布局
 #[repr(C)]
 pub struct TrapContext {
     /// general regs[0..31]
@@ -18,9 +19,9 @@ impl TrapContext {
     /// init app context
     pub fn app_init_context(entry: usize, sp: usize) -> Self {
         let mut sstatus = sstatus::read(); // CSR sstatus
-        sstatus.set_spp(SPP::User); //previous privilege mode: user mode
+        sstatus.set_spp(SPP::User); // previous privilege mode: user mode
         let mut cx = Self {
-            x: [0; 32],
+            x: [0usize; 32],
             sstatus,
             sepc: entry, // entry point of app
         };

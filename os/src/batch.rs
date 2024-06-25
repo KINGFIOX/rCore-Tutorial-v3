@@ -31,12 +31,14 @@ static USER_STACK: UserStack = UserStack {
 
 impl KernelStack {
     fn get_sp(&self) -> usize {
+        // 栈顶
         self.data.as_ptr() as usize + KERNEL_STACK_SIZE
     }
     pub fn push_context(&self, cx: TrapContext) -> &'static mut TrapContext {
+        // 把 cx_ptr 指向了新的栈顶，然后复制一层 frame , 然后返回 kernel 的栈顶
         let cx_ptr = (self.get_sp() - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
         unsafe {
-            *cx_ptr = cx;
+            *cx_ptr = cx; // 相当于是深拷贝，一大块内存倒了一下
         }
         unsafe { cx_ptr.as_mut().unwrap() }
     }
@@ -106,12 +108,12 @@ lazy_static! {
                 fn _num_app();
             }
             let num_app_ptr = _num_app as usize as *const usize;
-            let num_app = num_app_ptr.read_volatile();
+            let num_app = num_app_ptr.read_volatile();  // 读取 num_app
             let mut app_start: [usize; MAX_APP_NUM + 1] = [0; MAX_APP_NUM + 1];
             let app_start_raw: &[usize] =
                 core::slice::from_raw_parts(num_app_ptr.add(1), num_app + 1);
             app_start[..=num_app].copy_from_slice(app_start_raw);
-            AppManager {
+            AppManager {            // 构造对象
                 num_app,
                 current_app: 0,
                 app_start,
@@ -145,9 +147,10 @@ pub fn run_next_app() -> ! {
         fn __restore(cx_addr: usize);
     }
     unsafe {
+        // 这相当于是：开辟了一个空的栈帧。
         __restore(KERNEL_STACK.push_context(TrapContext::app_init_context(
             APP_BASE_ADDRESS,
-            USER_STACK.get_sp(),
+            USER_STACK.get_sp(), //
         )) as *const _ as usize);
     }
     panic!("Unreachable in batch::run_current_app!");
