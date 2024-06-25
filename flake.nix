@@ -38,7 +38,7 @@
             # Basic
             openssl
             pkg-config
-            exa
+            eza
             fd
             libclang
             # Cross Compile
@@ -56,7 +56,7 @@
           ];
 
           shellHook = ''
-            alias ls=exa
+            alias ls=eza
             alias find=fd
           '';
         };
