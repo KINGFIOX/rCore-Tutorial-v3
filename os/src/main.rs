@@ -29,6 +29,7 @@ pub mod batch;
 mod lang_items;
 mod logging;
 mod sbi;
+mod stack_trace;
 mod sync;
 pub mod syscall;
 pub mod trap;
