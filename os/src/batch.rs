@@ -6,27 +6,23 @@ use crate::trap::TrapContext;
 use core::arch::asm;
 use lazy_static::*;
 
-const USER_STACK_SIZE: usize = 4096 * 2;
-const KERNEL_STACK_SIZE: usize = 4096 * 2;
 const MAX_APP_NUM: usize = 16;
+
+// 其实是: 所有的 app 都是头一个其实地址
 const APP_BASE_ADDRESS: usize = 0x80400000;
 const APP_SIZE_LIMIT: usize = 0x20000;
+
+/* ---------- ---------- kernel stack ---------- ---------- */
+
+const KERNEL_STACK_SIZE: usize = 4096 * 2;
 
 #[repr(align(4096))]
 struct KernelStack {
     data: [u8; KERNEL_STACK_SIZE],
 }
 
-#[repr(align(4096))]
-struct UserStack {
-    data: [u8; USER_STACK_SIZE],
-}
-
 static KERNEL_STACK: KernelStack = KernelStack {
     data: [0; KERNEL_STACK_SIZE],
-};
-static USER_STACK: UserStack = UserStack {
-    data: [0; USER_STACK_SIZE],
 };
 
 impl KernelStack {
@@ -44,13 +40,29 @@ impl KernelStack {
     }
 }
 
+/* ---------- ---------- user stack ---------- ---------- */
+
+const USER_STACK_SIZE: usize = 4096 * 2;
+
+#[repr(align(4096))]
+struct UserStack {
+    data: [u8; USER_STACK_SIZE],
+}
+
+static USER_STACK: UserStack = UserStack {
+    data: [0; USER_STACK_SIZE],
+};
+
 impl UserStack {
     fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + USER_STACK_SIZE
     }
 }
 
+/* ---------- ---------- app manager ---------- ---------- */
+
 struct AppManager {
+    /// AppManager 中. number of app
     num_app: usize,
     current_app: usize,
     app_start: [usize; MAX_APP_NUM + 1],
@@ -76,7 +88,9 @@ impl AppManager {
         }
         println!("[kernel] Loading app_{}", app_id);
         // clear app area
-        core::slice::from_raw_parts_mut(APP_BASE_ADDRESS as *mut u8, APP_SIZE_LIMIT).fill(0);
+        core::slice::from_raw_parts_mut(APP_BASE_ADDRESS as *mut u8, APP_SIZE_LIMIT) /* from_raw_parts_mut 返回 &'a mut [T] */
+        .fill(0); /* slice fill(0) */
+        // app 的 src 的 起始地址
         let app_src = core::slice::from_raw_parts(
             self.app_start[app_id] as *const u8,
             self.app_start[app_id + 1] - self.app_start[app_id],
@@ -100,6 +114,35 @@ impl AppManager {
         self.current_app += 1;
     }
 }
+
+/* ---------- ---------- 下一个 ---------- ---------- */
+
+/// run next app
+pub fn run_next_app() -> ! {
+    let mut app_manager = APP_MANAGER.exclusive_access();
+    let current_app = app_manager.get_current_app();
+    unsafe {
+        app_manager.load_app(current_app);
+    }
+    app_manager.move_to_next_app();
+    drop(app_manager);
+    // before this we have to drop local variables related to resources manually
+    // and release the resources
+
+    extern "C" {
+        fn __restore(cx_addr: usize);
+    }
+    unsafe {
+        // 相当于是: 准备好了 context, 然后恢复到 context
+        __restore(KERNEL_STACK.push_context(
+            // 上下文要有 1. app 的地址; 2. app 的栈地址
+            TrapContext::app_init_context(APP_BASE_ADDRESS, USER_STACK.get_sp()),
+        ) as *const _ as usize);
+    }
+    panic!("Unreachable in batch::run_current_app!");
+}
+
+/* ---------- ---------- init ---------- ---------- */
 
 lazy_static! {
     static ref APP_MANAGER: UPSafeCell<AppManager> = unsafe {
@@ -130,28 +173,4 @@ pub fn init() {
 /// print apps info
 pub fn print_app_info() {
     APP_MANAGER.exclusive_access().print_app_info();
-}
-
-/// run next app
-pub fn run_next_app() -> ! {
-    let mut app_manager = APP_MANAGER.exclusive_access();
-    let current_app = app_manager.get_current_app();
-    unsafe {
-        app_manager.load_app(current_app);
-    }
-    app_manager.move_to_next_app();
-    drop(app_manager);
-    // before this we have to drop local variables related to resources manually
-    // and release the resources
-    extern "C" {
-        fn __restore(cx_addr: usize);
-    }
-    unsafe {
-        // 这相当于是：开辟了一个空的栈帧。
-        __restore(KERNEL_STACK.push_context(TrapContext::app_init_context(
-            APP_BASE_ADDRESS,
-            USER_STACK.get_sp(), //
-        )) as *const _ as usize);
-    }
-    panic!("Unreachable in batch::run_current_app!");
 }

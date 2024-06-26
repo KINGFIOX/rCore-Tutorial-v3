@@ -5,7 +5,7 @@ use riscv::register::sstatus::{self, Sstatus, SPP};
 pub struct TrapContext {
     /// general regs[0..31]
     pub x: [usize; 32],
-    /// CSR sstatus      
+    /// CSR sstatus
     pub sstatus: Sstatus,
     /// CSR sepc
     pub sepc: usize,
@@ -16,10 +16,14 @@ impl TrapContext {
     pub fn set_sp(&mut self, sp: usize) {
         self.x[2] = sp;
     }
+
     /// init app context
     pub fn app_init_context(entry: usize, sp: usize) -> Self {
+        // sstatus
         let mut sstatus = sstatus::read(); // CSR sstatus
         sstatus.set_spp(SPP::User); // previous privilege mode: user mode
+
+        // 创建 context
         let mut cx = Self {
             x: [0usize; 32],
             sstatus,

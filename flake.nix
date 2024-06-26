@@ -32,9 +32,6 @@
           })
         ];
         pkgs = import nixpkgs { inherit system overlays; };
-        riscv64-pkgs = import <nixpkgs> {
-          crossSystem = (import <nixpkgs/lib>).systems.examples.riscv64;
-        };
         # pkg-qemu = import nixpkgs-qemu7 { inherit system; };
       in {
         devShells.default = pkgs.mkShell {
@@ -49,7 +46,7 @@
             # Cross Compile
             (with pkgsCross.riscv64; [
               glib.stdenv.cc
-              gdb
+              buildPackages.gdb
             ]) # If use normally, no necessary need to change.
             # Rust Configuraiton  
             rustup
@@ -60,12 +57,6 @@
           ]) ++ [
             # pkgs.qemu
             # pkg-qemu.qemu
-          ];
-
-          nativeBuildInputs = [
-            # Uncomment to also bring QEMU, if you don't have it system-wide.
-            # riscv64-pkgs.buildPackages.buildPackages.qemu
-            riscv64-pkgs.buildPackages.gdb
           ];
 
           shellHook = ''

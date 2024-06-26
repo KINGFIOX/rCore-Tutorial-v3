@@ -40,26 +40,25 @@ __alltraps:
     call trap_handler
 
 __restore:
-    # case1: start running app by __restore
-    # case2: back to U after handling trap
+    # 传进来的是 TrapContext 的指针
     mv sp, a0
-    # now sp->kernel stack(after allocated), sscratch->user stack
-    # restore sstatus/sepc
-    ld t0, 32*8(sp)
-    ld t1, 33*8(sp)
-    ld t2, 2*8(sp)
+
+    ld t0, 32*8(sp)  # sstatus
     csrw sstatus, t0
-    csrw sepc, t1  # 这里会返回到用户栈
+    ld t1, 33*8(sp)  # sepc
+    csrw sepc, t1
+    ld t2, 2*8(sp)  # sp
     csrw sscratch, t2
-    # restore general-purpuse registers except sp/tp
-    ld x1, 1*8(sp)
-    ld x3, 3*8(sp)
+    ld x1, 1*8(sp)  # ra
+
+    ld x3, 3*8(sp)  # gp 用于指向全局数据区
+
+    # 恢复寄存器上下文
     .set n, 5
     .rept 27
         LOAD_GP %n
         .set n, n+1
     .endr
-    # release TrapContext on kernel stack
     addi sp, sp, 34*8
     # now sp->kernel stack, sscratch->user stack
     csrrw sp, sscratch, sp
