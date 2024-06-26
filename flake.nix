@@ -2,6 +2,7 @@
 {
   description = "A devShell for rCore";
 
+  # 定义了 flake 输入源
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     # nixpkgs-qemu7.url = "https://github.com/NixOS/nixpkgs/archive/7cf5ccf1cdb2ba5f08f0ac29fc3d04b0b59a07e4.tar.gz";
@@ -31,6 +32,9 @@
           })
         ];
         pkgs = import nixpkgs { inherit system overlays; };
+        riscv64-pkgs = import <nixpkgs> {
+          crossSystem = (import <nixpkgs/lib>).systems.examples.riscv64;
+        };
         # pkg-qemu = import nixpkgs-qemu7 { inherit system; };
       in {
         devShells.default = pkgs.mkShell {
@@ -39,20 +43,29 @@
             openssl
             pkg-config
             eza
+            tmux
             fd
             libclang
             # Cross Compile
-            (with pkgsCross.riscv64;
-              [
-                musl.stdenv.cc
-              ]) # If use normally, no necessary need to change.
+            (with pkgsCross.riscv64; [
+              glib.stdenv.cc
+              gdb
+            ]) # If use normally, no necessary need to change.
             # Rust Configuraiton  
             rustup
             cargo-binutils
             rust-toolchain
+            qemu
+            gdb
           ]) ++ [
-            pkgs.qemu
+            # pkgs.qemu
             # pkg-qemu.qemu
+          ];
+
+          nativeBuildInputs = [
+            # Uncomment to also bring QEMU, if you don't have it system-wide.
+            # riscv64-pkgs.buildPackages.buildPackages.qemu
+            riscv64-pkgs.buildPackages.gdb
           ];
 
           shellHook = ''
