@@ -53,11 +53,16 @@ lazy_static! {
     /// Global variable: TASK_MANAGER
     pub static ref TASK_MANAGER: TaskManager = {
         let num_app = get_num_app();
+        // 创建空的 task
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
+            // goto_restore 会设置 ra 为 __restore
+            // init_app_cx 返回的是: 内核栈的 sp
+            // 这个 task 的 context 会将 ra 设置为 __restore
+            // 并且将 sp 设置为 init_app_cx 返回的内核栈的 sp
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
             task.task_status = TaskStatus::Ready;
         }
@@ -84,6 +89,8 @@ impl TaskManager {
         task0.task_status = TaskStatus::Running;
         let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
         drop(inner);
+        // 上面这一段代码主要就是要得到这个 next_task_cx_ptr
+
         let mut _unused = TaskContext::zero_init();
         // before this, we should drop local variables that must be dropped manually
         unsafe {
@@ -112,11 +119,15 @@ impl TaskManager {
     fn find_next_task(&self) -> Option<usize> {
         let inner = self.inner.exclusive_access();
         let current = inner.current_task;
+        // 找到 list 中的第一个 ready 的程序
+        // 其实这个 list 就有一个优先级的感觉
         (current + 1..current + self.num_app + 1)
             .map(|id| id % self.num_app)
             .find(|id| inner.tasks[*id].task_status == TaskStatus::Ready)
     }
 
+    // 不过他这里没有设置 current_task 的状态
+    // 因为 current_task 有两个情况: 1. 还没有执行完就让出 cpu (主动 yield 或者被强占) 2. 执行完了
     /// Switch current `Running` task to the task we have found,
     /// or there is no `Ready` task and we can exit with all applications completed
     fn run_next_task(&self) {

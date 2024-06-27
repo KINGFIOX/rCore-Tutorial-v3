@@ -2,9 +2,17 @@
 .macro SAVE_SN n
     sd s\n, (\n+2)*8(a0)
 .endm
+
 .macro LOAD_SN n
     ld s\n, (\n+2)*8(a1)
 .endm
+
+# 如果是从 first 进来，那么这个 context 就是 _unused
+# TextContext (
+#     ra: 0,
+#     sp: 0,
+#     s: [0; 12],
+# )
     .section .text
     .globl __switch
 __switch:

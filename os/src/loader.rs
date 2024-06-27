@@ -9,24 +9,16 @@ use crate::config::*;
 use crate::trap::TrapContext;
 use core::arch::asm;
 
+/* ---------- ---------- kernel ---------- ---------- */
+
 #[repr(align(4096))]
 #[derive(Copy, Clone)]
 struct KernelStack {
     data: [u8; KERNEL_STACK_SIZE],
 }
 
-#[repr(align(4096))]
-#[derive(Copy, Clone)]
-struct UserStack {
-    data: [u8; USER_STACK_SIZE],
-}
-
 static KERNEL_STACK: [KernelStack; MAX_APP_NUM] = [KernelStack {
     data: [0; KERNEL_STACK_SIZE],
-}; MAX_APP_NUM];
-
-static USER_STACK: [UserStack; MAX_APP_NUM] = [UserStack {
-    data: [0; USER_STACK_SIZE],
 }; MAX_APP_NUM];
 
 impl KernelStack {
@@ -42,13 +34,27 @@ impl KernelStack {
     }
 }
 
+/* ---------- ---------- user ---------- ---------- */
+
+#[repr(align(4096))]
+#[derive(Copy, Clone)]
+struct UserStack {
+    data: [u8; USER_STACK_SIZE],
+}
+
+static USER_STACK: [UserStack; MAX_APP_NUM] = [UserStack {
+    data: [0; USER_STACK_SIZE],
+}; MAX_APP_NUM];
+
 impl UserStack {
     fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + USER_STACK_SIZE
     }
 }
 
-/// Get base address of app i.
+/* ---------- ---------- load ---------- ---------- */
+
+/// 获取 app[id] 的 base
 fn get_base_i(app_id: usize) -> usize {
     APP_BASE_ADDRESS + app_id * APP_SIZE_LIMIT
 }
@@ -69,14 +75,14 @@ pub fn load_apps() {
     }
     let num_app_ptr = _num_app as usize as *const usize;
     let num_app = get_num_app();
+    // 得到一个切片
     let app_start = unsafe { core::slice::from_raw_parts(num_app_ptr.add(1), num_app + 1) };
     // load apps
     for i in 0..num_app {
         let base_i = get_base_i(i);
-        // clear region
+        // 这个 base_i 是第 i 个 app 的 instr 地址
         (base_i..base_i + APP_SIZE_LIMIT)
             .for_each(|addr| unsafe { (addr as *mut u8).write_volatile(0) });
-        // load app from data section to memory
         let src = unsafe {
             core::slice::from_raw_parts(app_start[i] as *const u8, app_start[i + 1] - app_start[i])
         };
@@ -96,8 +102,9 @@ pub fn load_apps() {
 
 /// get app info with entry and sp and save `TrapContext` in kernel stack
 pub fn init_app_cx(app_id: usize) -> usize {
-    KERNEL_STACK[app_id].push_context(TrapContext::app_init_context(
-        get_base_i(app_id),
-        USER_STACK[app_id].get_sp(),
-    ))
+    // 返回的是 kernel_stack 的 sp
+    KERNEL_STACK[app_id].push_context(
+        // 创建一个 app_init_context
+        TrapContext::app_init_context(get_base_i(app_id), USER_STACK[app_id].get_sp()),
+    )
 }

@@ -54,6 +54,7 @@
             rust-toolchain
             qemu
             gdb
+            python3
           ]) ++ [
             # pkgs.qemu
             # pkg-qemu.qemu
