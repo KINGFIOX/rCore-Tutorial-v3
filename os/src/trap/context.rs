@@ -26,7 +26,7 @@ impl TrapContext {
         // 创建 context
         let mut cx = Self {
             x: [0usize; 32],
-            sstatus,
+            sstatus,     // U-mode 还是 S-mode
             sepc: entry, // entry point of app
         };
         cx.set_sp(sp); // app's user stack pointer

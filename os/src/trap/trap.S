@@ -45,10 +45,10 @@ __restore:
 
     ld t0, 32*8(sp)  # sstatus
     csrw sstatus, t0
-    ld t1, 33*8(sp)  # sepc
+    ld t1, 33*8(sp)  # sepc -> entry
     csrw sepc, t1
-    ld t2, 2*8(sp)  # sp
-    csrw sscratch, t2
+    ld t2, 2*8(sp)  # sp -> 用户栈
+    csrw sscratch, t2  # sscratch 
     ld x1, 1*8(sp)  # ra
 
     ld x3, 3*8(sp)  # gp 用于指向全局数据区
@@ -64,4 +64,6 @@ __restore:
 
     # now sp->kernel stack, sscratch->user stack
     csrrw sp, sscratch, sp
-    sret
+    sret # S -> U
+    # sp -> 用户栈
+    # pc <- sepc(entry)

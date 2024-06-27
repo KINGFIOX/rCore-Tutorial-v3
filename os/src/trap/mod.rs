@@ -32,6 +32,8 @@ pub fn init() {
     }
     unsafe {
         // stvec 有两种使用方式，分别是 Direct 和 Vectored。手册中有些
+        // supervisor trap vec
+        //
         stvec::write(__alltraps as usize, TrapMode::Direct);
     }
 }

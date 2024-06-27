@@ -88,13 +88,16 @@ impl AppManager {
         }
         println!("[kernel] Loading app_{}", app_id);
         // clear app area
+        // text -> havard
         core::slice::from_raw_parts_mut(APP_BASE_ADDRESS as *mut u8, APP_SIZE_LIMIT) /* from_raw_parts_mut 返回 &'a mut [T] */
         .fill(0); /* slice fill(0) */
         // app 的 src 的 起始地址
+        // app_src 指向的是 app image 的起始地址
         let app_src = core::slice::from_raw_parts(
             self.app_start[app_id] as *const u8,
             self.app_start[app_id + 1] - self.app_start[app_id],
         );
+        // 复制到 APP_BASE_ADDRESS, 这个地方是被操作系统认的
         let app_dst = core::slice::from_raw_parts_mut(APP_BASE_ADDRESS as *mut u8, app_src.len());
         app_dst.copy_from_slice(app_src);
         // Memory fence about fetching the instruction memory
@@ -125,6 +128,7 @@ pub fn run_next_app() -> ! {
         app_manager.load_app(current_app);
     }
     app_manager.move_to_next_app();
+    // refcell drop
     drop(app_manager);
     // before this we have to drop local variables related to resources manually
     // and release the resources
@@ -134,10 +138,13 @@ pub fn run_next_app() -> ! {
     }
     unsafe {
         // 相当于是: 准备好了 context, 然后恢复到 context
-        __restore(KERNEL_STACK.push_context(
-            // 上下文要有 1. app 的地址; 2. app 的栈地址
-            TrapContext::app_init_context(APP_BASE_ADDRESS, USER_STACK.get_sp()),
-        ) as *const _ as usize);
+        __restore(
+            //
+            KERNEL_STACK.push_context(
+                // 上下文要有 1. app 的地址; 2. app 的栈地址
+                TrapContext::app_init_context(APP_BASE_ADDRESS, USER_STACK.get_sp()),
+            ) as *const _ as usize,
+        );
     }
     panic!("Unreachable in batch::run_current_app!");
 }

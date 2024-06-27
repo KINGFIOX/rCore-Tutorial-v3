@@ -8,10 +8,10 @@ fn syscall(id: usize, args: [usize; 3]) -> isize {
     unsafe {
         asm!(
             "ecall",
-            inlateout("x10") args[0] => ret,
-            in("x11") args[1],
-            in("x12") args[2],
-            in("x17") id
+            inlateout("x10") args[0] => ret, // a0
+            in("x11") args[1], // a1
+            in("x12") args[2], // a2
+            in("x17") id  // a7 -> ecall 系统调用编号
         );
     }
     ret
