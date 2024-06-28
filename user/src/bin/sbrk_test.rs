@@ -23,9 +23,9 @@ fn main() -> i32 {
     let new_page = unsafe {
         &mut *slice_from_raw_parts_mut(origin_brk as usize as *const u8 as *mut u8, PAGE_SIZE)
     };
-    for pos in 0..PAGE_SIZE {
+    (0..PAGE_SIZE).for_each(|pos| {
         new_page[pos] = 1;
-    }
+    });
     println!("write ok");
     sbrk(PAGE_SIZE as i32 * 10);
     let brk = sbrk(0);
@@ -34,15 +34,15 @@ fn main() -> i32 {
     let brk = sbrk(0);
     println!("11 page DEALLOCATED,  break point = {:x}", brk);
     println!("try DEALLOCATED more one page, should be failed.");
-    let ret = sbrk(PAGE_SIZE as i32 * -1);
+    let ret = sbrk(-(PAGE_SIZE as i32));
     if ret != -1 {
         println!("Test sbrk failed!");
         return -1;
     }
     println!("Test sbrk almost OK!");
     println!("now write to deallocated page, should cause page fault.");
-    for pos in 0..PAGE_SIZE {
+    (0..PAGE_SIZE).for_each(|pos| {
         new_page[pos] = 2;
-    }
+    });
     0
 }
