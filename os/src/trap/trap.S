@@ -10,6 +10,7 @@
     .globl __restore
     .align 2
 __alltraps:
+    # 切换到内核栈
     csrrw sp, sscratch, sp
     # now sp->kernel stack, sscratch->user stack
     # allocate a TrapContext on kernel stack
