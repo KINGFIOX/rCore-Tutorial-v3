@@ -63,7 +63,7 @@ fn clear_bss() {
 pub fn rust_main() -> ! {
     clear_bss();
     println!("[kernel] Hello, world!");
-    mm::init();
+    mm::init(); // 最后会初始化内核的空间
     println!("[kernel] back to world!");
     mm::remap_test();
     trap::init();

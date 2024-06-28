@@ -31,6 +31,7 @@ lazy_static! {
     pub static ref KERNEL_SPACE: Arc<UPSafeCell<MemorySet>> = Arc::new(unsafe { UPSafeCell::new(MemorySet::new_kernel()) });
 }
 
+/// 这个是针对一个进程来说的
 /// memory set structure, controls virtual-memory space
 pub struct MemorySet {
     page_table: PageTable,
@@ -38,15 +39,21 @@ pub struct MemorySet {
 }
 
 impl MemorySet {
+    /// 1. 创建 page-table
+    /// 2. 创建一些 MapArea
     pub fn new_bare() -> Self {
         Self {
             page_table: PageTable::new(),
             areas: Vec::new(),
         }
     }
+
+    /// 返回 page table 的标识符
+    /// 就是 root ppn 的 token
     pub fn token(&self) -> usize {
         self.page_table.token()
     }
+
     /// Assume that no conflicts.
     pub fn insert_framed_area(
         &mut self,
@@ -59,6 +66,8 @@ impl MemorySet {
             None,
         );
     }
+
+    /// push 到一个 MapArea 中
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
@@ -77,9 +86,10 @@ impl MemorySet {
     }
 
     /// Without kernel stacks.
+    /// kernel 都是 Identical
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare();
-        // map trampoline
+        // map trampoline 这个只是插入到 page_table 中，并没有插入到 MapArea 中
         memory_set.map_trampoline();
         // map kernel sections
         println!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
@@ -166,7 +176,7 @@ impl MemorySet {
         let magic = elf_header.pt1.magic;
         assert_eq!(magic, [0x7f, 0x45, 0x4c, 0x46], "invalid elf!");
         let ph_count = elf_header.pt2.ph_count();
-        let mut max_end_vpn = VirtPageNum(0);
+        let mut max_end_vpn = VirtPageNum(0); // 这只是初始化一个变量，后面要更改的
         for i in 0..ph_count {
             let ph = elf.program_header(i).unwrap();
             if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
@@ -232,6 +242,8 @@ impl MemorySet {
             elf.header.pt2.entry_point() as usize,
         )
     }
+
+    /// Activate this memory set
     pub fn activate(&self) {
         let satp = self.page_table.token();
         unsafe {
@@ -239,9 +251,13 @@ impl MemorySet {
             asm!("sfence.vma");
         }
     }
+
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
     }
+
+    /// 将 start 这一个 VPNRange 对应的 end 进行 shrink
+    /// start 不会变，只有 end 会变
     #[allow(unused)]
     pub fn shrink_to(&mut self, start: VirtAddr, new_end: VirtAddr) -> bool {
         if let Some(area) = self
@@ -255,6 +271,8 @@ impl MemorySet {
             false
         }
     }
+
+    /// 将 start 这一个 VPNRange 对应的 end 进行 append
     #[allow(unused)]
     pub fn append_to(&mut self, start: VirtAddr, new_end: VirtAddr) -> bool {
         if let Some(area) = self
@@ -271,8 +289,12 @@ impl MemorySet {
 }
 
 /// map area structure, controls a contiguous piece of virtual memory
+/// 虚拟地址范围，也就是 virtual page number 的范围
+/// 一个 image 有很多个段，每个段的属性是不一样的
+/// 不同的段肯定是有着不同的 MapArea 的。这么设计是合理的
 pub struct MapArea {
     vpn_range: VPNRange,
+    /// (virtual page number, frame 里面有 physical page number )
     data_frames: BTreeMap<VirtPageNum, FrameTracker>,
     map_type: MapType,
     map_perm: MapPermission,
@@ -294,6 +316,10 @@ impl MapArea {
             map_perm,
         }
     }
+
+    /// 做了两件事:
+    /// 1. 分配一个 frame 并插入到 MapArea 中
+    /// 2. 在 page_table 上设置 pte
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         let ppn: PhysPageNum;
         match self.map_type {
@@ -301,14 +327,19 @@ impl MapArea {
                 ppn = PhysPageNum(vpn.0);
             }
             MapType::Framed => {
+                // 分配一个 ppn
                 let frame = frame_alloc().unwrap();
                 ppn = frame.ppn;
+                // BTreeMap 中插入: vpn 与 ppn 的映射
                 self.data_frames.insert(vpn, frame);
             }
         }
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
+
+        // page_table 上设置 pte
         page_table.map(vpn, ppn, pte_flags);
     }
+
     #[allow(unused)]
     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         if self.map_type == MapType::Framed {
@@ -316,24 +347,31 @@ impl MapArea {
         }
         page_table.unmap(vpn);
     }
+
+    /// self 是 map_area
+    /// 遍历 vpn_range 并 map_one
     pub fn map(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
             self.map_one(page_table, vpn);
         }
     }
+
     #[allow(unused)]
     pub fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
             self.unmap_one(page_table, vpn);
         }
     }
+
     #[allow(unused)]
     pub fn shrink_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
+        // 将 old end -> new end, 后面全部 unmap
         for vpn in VPNRange::new(new_end, self.vpn_range.get_end()) {
             self.unmap_one(page_table, vpn)
         }
         self.vpn_range = VPNRange::new(self.vpn_range.get_start(), new_end);
     }
+
     #[allow(unused)]
     pub fn append_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
         for vpn in VPNRange::new(self.vpn_range.get_end(), new_end) {
@@ -341,8 +379,10 @@ impl MapArea {
         }
         self.vpn_range = VPNRange::new(self.vpn_range.get_start(), new_end);
     }
+
     /// data: start-aligned but maybe with shorter length
     /// assume that all frames were cleared before
+    ///
     pub fn copy_data(&mut self, page_table: &mut PageTable, data: &[u8]) {
         assert_eq!(self.map_type, MapType::Framed);
         let mut start: usize = 0;
@@ -350,8 +390,8 @@ impl MapArea {
         let len = data.len();
         loop {
             let src = &data[start..len.min(start + PAGE_SIZE)];
-            let dst = &mut page_table
-                .translate(current_vpn)
+            let dst = &mut page_table // page_table 是 BTreeMap
+                .translate(current_vpn) // 找到 current_vpn 对应的 ppn
                 .unwrap()
                 .ppn()
                 .get_bytes_array()[..src.len()];
@@ -368,7 +408,9 @@ impl MapArea {
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// map type for memory set: identical or framed
 pub enum MapType {
+    /// 恒等映射，物理地址与虚拟地址相同
     Identical,
+    /// Framed 的映射
     Framed,
 }
 
@@ -378,6 +420,7 @@ bitflags! {
         const R = 1 << 1;
         const W = 1 << 2;
         const X = 1 << 3;
+        /// U 表示: U-mode 下可访问的
         const U = 1 << 4;
     }
 }
