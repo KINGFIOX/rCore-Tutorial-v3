@@ -9,6 +9,7 @@ use core::fmt::{self, Debug, Formatter};
 use lazy_static::*;
 
 /// manage a frame which has the same lifecycle as the tracker
+/// 这个数据结构就是用来跟踪 frame 的
 pub struct FrameTracker {
     pub ppn: PhysPageNum,
 }
@@ -17,9 +18,10 @@ impl FrameTracker {
     pub fn new(ppn: PhysPageNum) -> Self {
         // page cleaning
         let bytes_array = ppn.get_bytes_array();
-        for i in bytes_array {
-            *i = 0;
-        }
+        bytes_array.fill(0);
+        // for i in bytes_array {
+        //     *i = 0;
+        // }
         Self { ppn }
     }
 }
@@ -30,6 +32,7 @@ impl Debug for FrameTracker {
     }
 }
 
+/// RAII drop
 impl Drop for FrameTracker {
     fn drop(&mut self) {
         frame_dealloc(self.ppn);
@@ -44,8 +47,8 @@ trait FrameAllocator {
 
 /// an implementation for frame allocator
 pub struct StackFrameAllocator {
-    current: usize,
-    end: usize,
+    current: usize, // 空闲 start
+    end: usize,     // 空闲 end
     recycled: Vec<usize>,
 }
 
@@ -65,14 +68,18 @@ impl FrameAllocator for StackFrameAllocator {
     }
     fn alloc(&mut self) -> Option<PhysPageNum> {
         if let Some(ppn) = self.recycled.pop() {
+            // 栈中有空闲的
             Some(ppn.into())
         } else if self.current == self.end {
-            None
+            None // 没有空闲的了
         } else {
+            let ppn = self.current;
             self.current += 1;
-            Some((self.current - 1).into())
+            Some((ppn).into())
         }
     }
+
+    /// dealloc 就是: 将 ppn 放入 recycled 中
     fn dealloc(&mut self, ppn: PhysPageNum) {
         let ppn = ppn.0;
         // validity check
@@ -88,8 +95,7 @@ type FrameAllocatorImpl = StackFrameAllocator;
 
 lazy_static! {
     /// frame allocator instance through lazy_static!
-    pub static ref FRAME_ALLOCATOR: UPSafeCell<FrameAllocatorImpl> =
-        unsafe { UPSafeCell::new(FrameAllocatorImpl::new()) };
+    pub static ref FRAME_ALLOCATOR: UPSafeCell<FrameAllocatorImpl> = unsafe { UPSafeCell::new(FrameAllocatorImpl::new()) };
 }
 
 /// initiate the frame allocator using `ekernel` and `MEMORY_END`

@@ -28,8 +28,7 @@ extern "C" {
 
 lazy_static! {
     /// a memory set instance through lazy_static! managing kernel space
-    pub static ref KERNEL_SPACE: Arc<UPSafeCell<MemorySet>> =
-        Arc::new(unsafe { UPSafeCell::new(MemorySet::new_kernel()) });
+    pub static ref KERNEL_SPACE: Arc<UPSafeCell<MemorySet>> = Arc::new(unsafe { UPSafeCell::new(MemorySet::new_kernel()) });
 }
 
 /// memory set structure, controls virtual-memory space
@@ -67,6 +66,7 @@ impl MemorySet {
         }
         self.areas.push(map_area);
     }
+
     /// Mention that trampoline is not collected by areas.
     fn map_trampoline(&mut self) {
         self.page_table.map(
@@ -75,6 +75,7 @@ impl MemorySet {
             PTEFlags::R | PTEFlags::X,
         );
     }
+
     /// Without kernel stacks.
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare();
@@ -152,6 +153,7 @@ impl MemorySet {
         }
         memory_set
     }
+
     /// Include sections in elf and trampoline and TrapContext and user stack,
     /// also returns user_sp and entry point.
     pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
