@@ -9,6 +9,7 @@ const MSEC_PER_SEC: usize = 1000;
 
 /// read the `mtime` register
 pub fn get_time() -> usize {
+    // mtime 会随着时间而增长, 可以用来确定系统运行了多长时间
     time::read()
 }
 

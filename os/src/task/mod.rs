@@ -122,7 +122,7 @@ impl TaskManager {
         // 找到 list 中的第一个 ready 的程序
         // 其实这个 list 就有一个优先级的感觉
         (current + 1..current + self.num_app + 1)
-            .map(|id| id % self.num_app)
+            .map(|id| id % self.num_app) // 这里实际上就把 current 放到了最后
             .find(|id| inner.tasks[*id].task_status == TaskStatus::Ready)
     }
 
@@ -141,6 +141,7 @@ impl TaskManager {
             drop(inner);
             // before this, we should drop local variables that must be dropped manually
             unsafe {
+                // cur's context -> next's context
                 __switch(current_task_cx_ptr, next_task_cx_ptr);
             }
             // go back to user mode

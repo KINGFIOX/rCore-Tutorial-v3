@@ -17,10 +17,6 @@ struct KernelStack {
     data: [u8; KERNEL_STACK_SIZE],
 }
 
-static KERNEL_STACK: [KernelStack; MAX_APP_NUM] = [KernelStack {
-    data: [0; KERNEL_STACK_SIZE],
-}; MAX_APP_NUM];
-
 impl KernelStack {
     fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + KERNEL_STACK_SIZE
@@ -34,6 +30,10 @@ impl KernelStack {
     }
 }
 
+static KERNEL_STACK: [KernelStack; MAX_APP_NUM] = [KernelStack {
+    data: [0; KERNEL_STACK_SIZE], // kernel stack 初始化为 0
+}; MAX_APP_NUM];
+
 /* ---------- ---------- user ---------- ---------- */
 
 #[repr(align(4096))]
@@ -42,15 +42,15 @@ struct UserStack {
     data: [u8; USER_STACK_SIZE],
 }
 
-static USER_STACK: [UserStack; MAX_APP_NUM] = [UserStack {
-    data: [0; USER_STACK_SIZE],
-}; MAX_APP_NUM];
-
 impl UserStack {
     fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + USER_STACK_SIZE
     }
 }
+
+static USER_STACK: [UserStack; MAX_APP_NUM] = [UserStack {
+    data: [0; USER_STACK_SIZE],
+}; MAX_APP_NUM];
 
 /* ---------- ---------- load ---------- ---------- */
 
@@ -67,27 +67,39 @@ pub fn get_num_app() -> usize {
     unsafe { (_num_app as usize as *const usize).read_volatile() }
 }
 
-/// Load nth user app at
-/// [APP_BASE_ADDRESS + n * APP_SIZE_LIMIT, APP_BASE_ADDRESS + (n+1) * APP_SIZE_LIMIT).
+/// 结构可以参考 build.rs . 这里是初始化 .text 空间。
+/// 然而, USER_STACK 和 KERNEL_STACK 在 lazy_static! 中初始化的
 pub fn load_apps() {
     extern "C" {
-        fn _num_app();
+        fn _num_app(); // 全局变量
     }
     let num_app_ptr = _num_app as usize as *const usize;
     let num_app = get_num_app();
-    // 得到一个切片
-    let app_start = unsafe { core::slice::from_raw_parts(num_app_ptr.add(1), num_app + 1) };
+
+    // apps 的起始地址 vec
+    let apps_start = unsafe {
+        core::slice::from_raw_parts(
+            num_app_ptr.add(1), /* 这里的 add(1) 表示: 跳过了一个数据类型, 这里是 usize */
+            num_app + 1,
+        )
+    };
+
     // load apps
     for i in 0..num_app {
-        let base_i = get_base_i(i);
-        // 这个 base_i 是第 i 个 app 的 instr 地址
-        (base_i..base_i + APP_SIZE_LIMIT)
+        let base_i = get_base_i(i); // app[i] 表示第 i 个应用的地址空间, base_i 就已经是地址了
+        (base_i..base_i + APP_SIZE_LIMIT) // 初始化
             .for_each(|addr| unsafe { (addr as *mut u8).write_volatile(0) });
-        let src = unsafe {
-            core::slice::from_raw_parts(app_start[i] as *const u8, app_start[i + 1] - app_start[i])
+
+        // .text
+        let srcs = unsafe {
+            core::slice::from_raw_parts(
+                apps_start[i] as *const u8,
+                apps_start[i + 1] - apps_start[i],
+            )
         };
-        let dst = unsafe { core::slice::from_raw_parts_mut(base_i as *mut u8, src.len()) };
-        dst.copy_from_slice(src);
+
+        let dst = unsafe { core::slice::from_raw_parts_mut(base_i as *mut u8, srcs.len()) };
+        dst.copy_from_slice(srcs);
     }
     // Memory fence about fetching the instruction memory
     // It is guaranteed that a subsequent instruction fetch must

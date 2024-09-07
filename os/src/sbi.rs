@@ -8,6 +8,8 @@ pub fn console_putchar(c: usize) {
 
 /// use sbi call to set timer
 pub fn set_timer(timer: usize) {
+    // 通过 sbi 调用来设置计时器
+    // 这个时间也是用: 系统运行了多久度量的
     sbi_rt::set_timer(timer as _);
 }
 
