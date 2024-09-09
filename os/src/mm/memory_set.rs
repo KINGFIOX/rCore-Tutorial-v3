@@ -39,8 +39,7 @@ pub struct MemorySet {
 }
 
 impl MemorySet {
-    /// 1. 创建 page-table
-    /// 2. 创建一些 MapArea
+    /// new an empty memory_set
     pub fn new_bare() -> Self {
         Self {
             page_table: PageTable::new(),
@@ -80,16 +79,14 @@ impl MemorySet {
     fn map_trampoline(&mut self) {
         self.page_table.map(
             VirtAddr::from(TRAMPOLINE).into(),
-            PhysAddr::from(strampoline as usize).into(),
+            PhysAddr::from(strampoline /* linker set */ as usize).into(),
             PTEFlags::R | PTEFlags::X,
         );
     }
 
     /// Without kernel stacks.
-    /// kernel 都是 Identical
     pub fn new_kernel() -> Self {
-        let mut memory_set = Self::new_bare();
-        // map trampoline 这个只是插入到 page_table 中，并没有插入到 MapArea 中
+        let mut memory_set = Self::new_bare(); // page_table::new()
         memory_set.map_trampoline();
         // map kernel sections
         println!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
@@ -97,7 +94,7 @@ impl MemorySet {
         println!(".data [{:#x}, {:#x})", sdata as usize, edata as usize);
         println!(
             ".bss [{:#x}, {:#x})",
-            sbss_with_stack as usize, ebss as usize
+            sbss_with_stack /* len(stack) = 4096 * 16 */ as usize, ebss as usize
         );
         println!("mapping .text section");
         memory_set.push(
@@ -149,7 +146,7 @@ impl MemorySet {
             ),
             None,
         );
-        println!("mapping memory-mapped registers");
+        println!("mapping memory-mapped IOs");
         for pair in MMIO {
             memory_set.push(
                 MapArea::new(
@@ -169,12 +166,13 @@ impl MemorySet {
     pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
         let mut memory_set = Self::new_bare();
         // map trampoline
-        memory_set.map_trampoline();
-        // map program headers of elf, with U flag
+        memory_set.map_trampoline(); // 一开始就 map trampoline
+                                     // map program headers of elf, with U flag
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
         let elf_header = elf.header;
         let magic = elf_header.pt1.magic;
         assert_eq!(magic, [0x7f, 0x45, 0x4c, 0x46], "invalid elf!");
+        // ph_count 是 program header 的数量, 这个 program header 包含了 各个段的描述
         let ph_count = elf_header.pt2.ph_count();
         let mut max_end_vpn = VirtPageNum(0); // 这只是初始化一个变量，后面要更改的
         for i in 0..ph_count {
@@ -205,7 +203,7 @@ impl MemorySet {
         let max_end_va: VirtAddr = max_end_vpn.into();
         let mut user_stack_bottom: usize = max_end_va.into();
         // guard page
-        user_stack_bottom += PAGE_SIZE;
+        user_stack_bottom += PAGE_SIZE; // 再加一个 page 用作 stack
         let user_stack_top = user_stack_bottom + USER_STACK_SIZE;
         memory_set.push(
             MapArea::new(
@@ -219,7 +217,7 @@ impl MemorySet {
         // used in sbrk
         memory_set.push(
             MapArea::new(
-                user_stack_top.into(),
+                user_stack_top.into(), // 相当于是 sbrk 一开始没有内容
                 user_stack_top.into(),
                 MapType::Framed,
                 MapPermission::R | MapPermission::W | MapPermission::U,
@@ -310,16 +308,13 @@ impl MapArea {
         let start_vpn: VirtPageNum = start_va.floor();
         let end_vpn: VirtPageNum = end_va.ceil();
         Self {
-            vpn_range: VPNRange::new(start_vpn, end_vpn),
+            vpn_range: VPNRange::new(start_vpn, end_vpn), // range is just an interval
             data_frames: BTreeMap::new(),
             map_type,
             map_perm,
         }
     }
 
-    /// 做了两件事:
-    /// 1. 分配一个 frame 并插入到 MapArea 中
-    /// 2. 在 page_table 上设置 pte
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         let ppn: PhysPageNum;
         match self.map_type {
@@ -408,9 +403,7 @@ impl MapArea {
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// map type for memory set: identical or framed
 pub enum MapType {
-    /// 恒等映射，物理地址与虚拟地址相同
     Identical,
-    /// Framed 的映射
     Framed,
 }
 

@@ -18,7 +18,7 @@ impl TaskContext {
         Self {
             ra: 0,
             sp: 0,
-            s: [0; 12],
+            s: [0; 12], // 这个 task 只有 callee saved
         }
     }
     /// set Task Context{__restore ASM funciton: trap_return, sp: kstack_ptr, s: s_0..12}

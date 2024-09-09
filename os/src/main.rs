@@ -53,14 +53,15 @@ fn clear_bss() {
         fn ebss();
     }
     unsafe {
-        core::slice::from_raw_parts_mut(sbss as usize as *mut u8, ebss as usize - sbss as usize)
-            .fill(0);
+        let len = ebss as usize - sbss as usize;
+        core::slice::from_raw_parts_mut(sbss as usize as *mut u8, len).fill(0);
     }
 }
 
 #[no_mangle]
 /// the rust entry-point of os
 pub fn rust_main() -> ! {
+    // 内核已经加载进来了, 但是 mm::init 做一个 map (记录)
     clear_bss();
     println!("[kernel] Hello, world!");
     mm::init(); // 最后会初始化内核的空间

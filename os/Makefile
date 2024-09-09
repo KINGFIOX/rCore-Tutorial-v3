@@ -1,6 +1,7 @@
 # Building
 TARGET := riscv64gc-unknown-none-elf
-MODE := release
+# MODE := release # debug
+MODE := debug
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
@@ -10,31 +11,31 @@ BOARD := qemu
 SBI ?= rustsbi
 BOOTLOADER := ../bootloader/$(SBI)-$(BOARD).bin
 
-# Building mode argument
-ifeq ($(MODE), release)
-	MODE_ARG := --release
-endif
+# # Building mode argument
+# ifeq ($(MODE), release)
+# 	MODE_ARG := --release
+# endif
 
 # KERNEL ENTRY
 KERNEL_ENTRY_PA := 0x80200000
 
 # Binutils
-OBJDUMP := rust-objdump --arch-name=riscv64
-OBJCOPY := rust-objcopy --binary-architecture=riscv64
+OBJDUMP := riscv64-none-elf-objdump
+OBJCOPY := riscv64-none-elf-objcopy
 
 # Disassembly
 DISASM ?= -x
 
-build: env $(KERNEL_BIN)
+build: $(KERNEL_BIN) # env
 
-env:
-	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
-	cargo install cargo-binutils
-	rustup component add rust-src
-	rustup component add llvm-tools-preview
+# env:
+# 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
+# 	cargo install cargo-binutils
+# 	rustup component add rust-src
+# 	rustup component add llvm-tools-preview
 
 $(KERNEL_BIN): kernel
-	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
+	@$(OBJCOPY) $(KERNEL_ELF) -O binary $@
 
 kernel:
 	@cd ../user && make build
@@ -74,6 +75,6 @@ gdbserver: build
 	@qemu-system-riscv64 $(QEMU_ARGS) -s -S
 
 gdbclient:
-	@riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'
+	@rust-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'
 
-.PHONY: build env kernel clean disasm disasm-vim run-inner gdbserver gdbclient
+.PHONY: build kernel clean disasm disasm-vim run-inner gdbserver gdbclient # env

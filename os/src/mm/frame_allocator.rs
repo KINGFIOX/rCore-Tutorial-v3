@@ -92,6 +92,7 @@ impl FrameAllocator for StackFrameAllocator {
     }
 }
 
+/// # physical frame allocator (frame pool)
 type FrameAllocatorImpl = StackFrameAllocator;
 
 lazy_static! {
@@ -104,6 +105,7 @@ pub fn init_frame_allocator() {
     extern "C" {
         fn ekernel();
     }
+    // lazy_static! being used here
     FRAME_ALLOCATOR.exclusive_access().init(
         PhysAddr::from(ekernel as usize).ceil(),
         PhysAddr::from(MEMORY_END).floor(),

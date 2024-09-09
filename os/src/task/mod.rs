@@ -85,6 +85,7 @@ impl TaskManager {
         let mut _unused = TaskContext::zero_init();
         // before this, we should drop local variables that must be dropped manually
         unsafe {
+            // this ra has been set to `trap_return`
             __switch(&mut _unused as *mut _, next_task_cx_ptr);
         }
         panic!("unreachable in run_first_task!");
@@ -157,7 +158,7 @@ impl TaskManager {
     }
 }
 
-/// Run the first task in task list.
+/// Run the first task in task list. with the same time: TASK_MANAGER init
 pub fn run_first_task() {
     TASK_MANAGER.run_first_task();
 }

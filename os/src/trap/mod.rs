@@ -35,6 +35,7 @@ pub fn init() {
 
 fn set_kernel_trap_entry() {
     unsafe {
+        // kernel trap -> panic ! (暂不支持)
         stvec::write(trap_from_kernel as usize, TrapMode::Direct);
     }
 }
@@ -55,7 +56,7 @@ pub fn enable_timer_interrupt() {
 #[no_mangle]
 /// handle an interrupt, exception, or system call from user space
 pub fn trap_handler() -> ! {
-    set_kernel_trap_entry();
+    set_kernel_trap_entry(); // 中断嵌套 ? 不可能的
     let cx = current_trap_cx();
     let scause = scause::read();
     let stval = stval::read();
@@ -95,19 +96,22 @@ pub fn trap_handler() -> ! {
 /// set the reg a0 = trap_cx_ptr, reg a1 = phy addr of usr page table,
 /// finally, jump to new addr of __restore asm function
 pub fn trap_return() -> ! {
-    set_user_trap_entry();
-    let trap_cx_ptr = TRAP_CONTEXT;
-    let user_satp = current_user_token();
+    set_user_trap_entry(); // 从 trap_return 的时候, 会设置 stvec 为 TRAMPOLINE
+                           // 这个 TRAMPOLINE 中有两个函数: __alltraps 和 __restore
+    let trap_cx_ptr = TRAP_CONTEXT; // virt addr of Trap Context, 倒数第二个 page
+    let user_satp = current_user_token(); // get user's satp
     extern "C" {
         fn __alltraps();
         fn __restore();
     }
+
+    // 这里反正是直接调用了 __restore 函数, 没有经过 __alltraps(保存context) -> trap_handler 的过程
     let restore_va = __restore as usize - __alltraps as usize + TRAMPOLINE;
     unsafe {
         asm!(
             "fence.i",
             "jr {restore_va}",             // jump to new addr of __restore asm function
-            restore_va = in(reg) restore_va,
+            restore_va = in(reg) restore_va,  // 声明一个叫做 restore_va 的寄存器, 将变量 restore_va 的值传递给寄存器 restore_va
             in("a0") trap_cx_ptr,      // a0 = virt addr of Trap Context
             in("a1") user_satp,        // a1 = phy addr of usr page table
             options(noreturn)

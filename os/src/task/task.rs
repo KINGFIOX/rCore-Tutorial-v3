@@ -18,7 +18,8 @@ pub struct TaskControlBlock {
 
 impl TaskControlBlock {
     pub fn get_trap_cx(&self) -> &'static mut TrapContext {
-        self.trap_cx_ppn.get_mut()
+        self.trap_cx_ppn /* this is a physical page number */
+            .get_mut()
     }
     pub fn get_user_token(&self) -> usize {
         self.memory_set.token()
@@ -48,13 +49,13 @@ impl TaskControlBlock {
             program_brk: user_sp,
         };
         // prepare TrapContext in user space
-        let trap_cx = task_control_block.get_trap_cx();
-        *trap_cx = TrapContext::app_init_context(
+        let trap_cx = task_control_block.get_trap_cx(); // &mut trap_cx_ppn
+        *trap_cx /* 给对应的 pnn 塞东西 */ = TrapContext::app_init_context(
             entry_point,
             user_sp,
             KERNEL_SPACE.exclusive_access().token(),
             kernel_stack_top,
-            trap_handler as usize,
+            trap_handler as usize,  // TRAP_CONTEXT
         );
         task_control_block
     }

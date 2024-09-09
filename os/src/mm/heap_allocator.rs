@@ -15,9 +15,9 @@ pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
 }
 
 /// heap space ([u8; KERNEL_HEAP_SIZE])
+/// 这个是在 kernel 的 .data 段上的
 static mut HEAP_SPACE: [u8; KERNEL_HEAP_SIZE] = [0; KERNEL_HEAP_SIZE];
 
-/// 设置分配器
 /// initiate heap allocator
 pub fn init_heap() {
     unsafe {
