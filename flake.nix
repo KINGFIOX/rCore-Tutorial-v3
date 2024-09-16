@@ -30,7 +30,8 @@
               buildPackages.gcc
               buildPackages.gdb
             ])
-            qemu
+            python312Packages.pygments
+            qemu_full
           ];
           RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
           MAKEFLAGS = "-j$(nproc)";
